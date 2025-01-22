@@ -4,14 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUpRightAndDownLeftFromCenter } from '@fortawesome/free-solid-svg-icons';
 import React, { useState, useEffect, useRef } from 'react';
 import Draggable from 'react-draggable';
-import dynamic from 'next/dynamic';
-import Swal from 'sweetalert2';
-
-// Dynamically import Hammer.js only on client side
-const Hammer = dynamic(() => import('hammerjs'), {
-  ssr: false,
-  loading: () => <div>Loading touch handler</div>
-});
+import { usePinch } from '@use-gesture/react';
 
 const DraggableImage = ({ width, height, uploadedImage }) => {
   const nodeRef = useRef(null);
@@ -19,93 +12,74 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [imgWidth, setImgWidth] = useState(200);
   const [imgHeight, setImgHeight] = useState(200);
-  const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     setIsClient(true);
-    Swal.fire('Info', 'Client-side rendering initialized', 'info');
   }, []);
 
-  // Initialize Hammer.js
+  // Pinch gesture handler using @use-gesture/react
+  usePinch(
+    ({ offset: [scale] }) => {
+      const adjustmentFactor = 10 * (scale - 1);
+      setImgWidth((prev) => Math.min(Math.max(100, prev + adjustmentFactor), width));
+      setImgHeight((prev) => Math.min(Math.max(100, prev + adjustmentFactor), height));
+    },
+    {
+      target: imageRef,
+      eventOptions: { passive: false },
+    }
+  );
+
+  // Mouse event handlers for resizing
+  const handleMouseMove = (e) => {
+    if (isResizing) {
+      const currentMousePos = { x: e.clientX, y: e.clientY };
+
+      if (currentMousePos.x < mousePos.x) {
+        setImgWidth((prev) => Math.max(100, prev - 10));
+        setImgHeight((prev) => Math.max(100, prev - 10));
+      } else if (currentMousePos.x > mousePos.x) {
+        setImgWidth((prev) => Math.min(width, prev + 10));
+        setImgHeight((prev) => Math.min(height, prev + 10));
+      }
+
+      setMousePos(currentMousePos);
+    }
+  };
+
+  const handleIconMouseDown = (e) => {
+    e.stopPropagation();
+    setIsResizing(true);
+    setMousePos({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleIconMouseUp = () => {
+    setIsResizing(false);
+  };
+
   useEffect(() => {
-    let hammerInstance = null;
+    if (!isClient) return;
 
-    const initHammer = async () => {
-      try {
-        Swal.fire('Info', 'Attempting to initialize Hammer.js', 'info');
-        Swal.fire({
-          title: 'Checks',
-          html: `
-            <p>isClient: ${isClient}</p>
-            <p>hasImageRef: ${!!imageRef.current}</p>
-            <p>hasHammer: ${!!Hammer}</p>
-          `,
-          icon: 'info',
-        });
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleIconMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleIconMouseUp);
+      };
+    }
+  }, [isResizing, mousePos, isClient]);
 
-        if (!isClient) {
-          Swal.fire('Warning', 'Not client side yet', 'warning');
-          return;
-        }
-
-        if (!imageRef.current) {
-          Swal.fire('Warning', 'Image ref not available', 'warning');
-          return;
-        }
-
-        if (!Hammer) {
-          Swal.fire('Error', 'Hammer.js not loaded', 'error');
-          return;
-        }
-
-        hammerInstance = new Hammer(imageRef.current);
-        Swal.fire('Success', 'Hammer instance created', 'success');
-
-        // Enable pinch with error handling
-        try {
-          hammerInstance.get('pinch').set({ enable: true });
-          Swal.fire('Success', 'Pinch gesture enabled', 'success');
-        } catch (err) {
-          Swal.fire('Error', `Error enabling pinch: ${err.message}`, 'error');
-          setError('Failed to enable pinch gesture');
-        }
-
-        hammerInstance.on('pinch', (e) => {
-          try {
-            const adjustmentFactor = 2;
-            const widthDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
-            const heightDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
-
-            setImgWidth((prev) => Math.min(Math.max(100, prev + widthDelta), width));
-            setImgHeight((prev) => Math.min(Math.max(100, prev + heightDelta), height));
-          } catch (err) {
-            Swal.fire('Error', `Error in pinch handler: ${err.message}`, 'error');
-            setError('Failed to handle pinch gesture');
-          }
-        });
-
-      } catch (err) {
-        Swal.fire('Error', `Error initializing Hammer: ${err.message}`, 'error');
-        setError('Failed to initialize touch handlers');
-      }
-    };
-
-    initHammer();
-
-    return () => {
-      if (hammerInstance) {
-        Swal.fire('Info', 'Cleaning up Hammer instance', 'info');
-        hammerInstance.destroy();
-      }
-    };
-  }, [isClient, width, height]);
+  const handleDrag = (e, data) => {
+    if (!isResizing) {
+      setPosition({ x: data.x, y: data.y });
+    }
+  };
 
   if (!isClient) {
-    Swal.fire('Warning', 'Returning null - not client side', 'warning');
     return null;
   }
 
@@ -119,38 +93,64 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
         overflow: 'hidden',
       }}
     >
-      {error && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            background: 'rgba(255,0,0,0.1)',
-            padding: '5px',
-            zIndex: 1000,
-          }}
-        >
-          {error}
-        </div>
-      )}
       <Draggable
         nodeRef={nodeRef}
         bounds="parent"
         position={position}
-        onDrag={(e, data) => setPosition({ x: data.x, y: data.y })}
-        onStop={() => Swal.fire('Info', 'Drag operation completed', 'info')}
+        onDrag={handleDrag}
         disabled={isResizing}
       >
-        <img
-          ref={imageRef}
-          src={uploadedImage}
-          alt="Draggable"
+        <div
+          ref={nodeRef}
           style={{
             width: `${imgWidth}px`,
             height: `${imgHeight}px`,
-            cursor: isDragging ? 'grabbing' : 'grab',
+            cursor: isResizing ? 'ew-resize' : 'grab',
+            position: 'relative',
+            transition: 'width 0.1s, height 0.1s',
           }}
-        />
+        >
+          <div
+            ref={imageRef}
+            style={{
+              width: '100%',
+              height: '100%',
+              touchAction: 'none',
+            }}
+          >
+            <img
+              src={
+                uploadedImage ||
+                'https://ik.imagekit.io/c1jhxlxiy/plate-various-fruits-marble-background-high-quality-photo.jpg?updatedAt=1737178016814'
+              }
+              alt="Draggable Combo Pack"
+              style={{
+                width: '100%',
+                height: '100%',
+                userSelect: 'none',
+                pointerEvents: isResizing ? 'none' : 'auto',
+              }}
+            />
+          </div>
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '2px',
+              right: '10px',
+              padding: '5px',
+              mixBlendMode: 'difference',
+              borderRadius: '50%',
+              cursor: 'ew-resize',
+              backgroundColor: isResizing ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
+            }}
+            onMouseDown={handleIconMouseDown}
+          >
+            <FontAwesomeIcon
+              icon={faUpRightAndDownLeftFromCenter}
+              style={{ transform: 'rotate(90deg)' }}
+            />
+          </div>
+        </div>
       </Draggable>
     </div>
   );

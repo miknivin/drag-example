@@ -10,7 +10,7 @@ import Swal from 'sweetalert2';
 // Dynamically import Hammer.js only on client side
 const Hammer = dynamic(() => import('hammerjs'), {
   ssr: false,
-  loading: () => <div>Loading touch handlers...</div>
+  loading: () => <div>Loading touch handler</div>
 });
 
 const DraggableImage = ({ width, height, uploadedImage }) => {

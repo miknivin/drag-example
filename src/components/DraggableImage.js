@@ -4,7 +4,12 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUpRightAndDownLeftFromCenter } from '@fortawesome/free-solid-svg-icons';
 import React, { useState, useEffect, useRef } from 'react';
 import Draggable from 'react-draggable';
-import Hammer from 'hammerjs';
+import dynamic from 'next/dynamic';
+
+// Dynamically import Hammer.js only on client side
+const Hammer = dynamic(() => import('hammerjs'), {
+  ssr: false
+});
 
 const DraggableImage = ({ width, height, uploadedImage }) => {
   const nodeRef = useRef(null);
@@ -15,8 +20,39 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isClient, setIsClient] = useState(false);
 
-  // Mouse event handlers for web
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Initialize Hammer.js
+  useEffect(() => {
+    if (!isClient || !imageRef.current || !Hammer) return;
+
+    const initHammer = async () => {
+      const hammer = new Hammer(imageRef.current);
+      
+      hammer.get('pinch').set({ enable: true });
+      
+      hammer.on('pinch', (e) => {
+        const adjustmentFactor = 2;
+        const widthDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
+        const heightDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
+
+        setImgWidth(prev => Math.min(Math.max(100, prev + widthDelta), width));
+        setImgHeight(prev => Math.min(Math.max(100, prev + heightDelta), height));
+      });
+
+      return () => {
+        hammer.destroy();
+      };
+    };
+
+    initHammer();
+  }, [isClient, width, height]);
+
+  // Mouse event handlers
   const handleMouseMove = (e) => {
     if (isResizing) {
       const currentMousePos = { x: e.clientX, y: e.clientY };
@@ -43,8 +79,9 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
     setIsResizing(false);
   };
 
-  // Mouse event listeners
   useEffect(() => {
+    if (!isClient) return;
+
     if (isResizing) {
       window.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleIconMouseUp);
@@ -53,31 +90,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
         document.removeEventListener('mouseup', handleIconMouseUp);
       };
     }
-  }, [isResizing, mousePos]);
-
-  // Touch event handlers using Hammer.js
-  useEffect(() => {
-    if (!imageRef.current) return;
-
-    const hammer = new Hammer(imageRef.current);
-    
-    // Enable pinch gesture recognition
-    hammer.get('pinch').set({ enable: true });
-    
-    hammer.on('pinch', (e) => {
-      // Adjust dimensions based on pinch scale
-      const adjustmentFactor = 2;
-      const widthDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
-      const heightDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
-
-      setImgWidth(prev => Math.min(Math.max(100, prev + widthDelta), width));
-      setImgHeight(prev => Math.min(Math.max(100, prev + heightDelta), height));
-    });
-
-    return () => {
-      hammer.destroy();
-    };
-  }, [width, height]);
+  }, [isResizing, mousePos, isClient]);
 
   const handleDrag = (e, data) => {
     if (!isResizing) {
@@ -89,6 +102,10 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   const handleStop = () => {
     setIsDragging(false);
   };
+
+  if (!isClient) {
+    return null;
+  }
 
   return (
     <div

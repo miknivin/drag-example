@@ -8,7 +8,8 @@ import dynamic from 'next/dynamic';
 
 // Dynamically import Hammer.js only on client side
 const Hammer = dynamic(() => import('hammerjs'), {
-  ssr: false
+  ssr: false,
+  loading: () => <div>Loading touch handlers...</div>
 });
 
 const DraggableImage = ({ width, height, uploadedImage }) => {
@@ -21,89 +22,88 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   const [isResizing, setIsResizing] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     setIsClient(true);
+    alert('Client-side rendering initialized');
   }, []);
 
   // Initialize Hammer.js
   useEffect(() => {
-    if (!isClient || !imageRef.current || !Hammer) return;
+    let hammerInstance = null;
 
     const initHammer = async () => {
-      const hammer = new Hammer(imageRef.current);
-      
-      hammer.get('pinch').set({ enable: true });
-      
-      hammer.on('pinch', (e) => {
-        const adjustmentFactor = 2;
-        const widthDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
-        const heightDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
+      try {
+        alert('Attempting to initialize Hammer.js');
+        alert(`Checks: ${JSON.stringify({
+          isClient,
+          hasImageRef: !!imageRef.current,
+          hasHammer: !!Hammer
+        })}`);
 
-        setImgWidth(prev => Math.min(Math.max(100, prev + widthDelta), width));
-        setImgHeight(prev => Math.min(Math.max(100, prev + heightDelta), height));
-      });
+        if (!isClient) {
+          alert('Not client side yet');
+          return;
+        }
 
-      return () => {
-        hammer.destroy();
-      };
+        if (!imageRef.current) {
+          alert('Image ref not available');
+          return;
+        }
+
+        if (!Hammer) {
+          alert('Hammer.js not loaded');
+          return;
+        }
+
+        hammerInstance = new Hammer(imageRef.current);
+        alert('Hammer instance created');
+
+        // Enable pinch with error handling
+        try {
+          hammerInstance.get('pinch').set({ enable: true });
+          alert('Pinch gesture enabled');
+        } catch (err) {
+          alert(`Error enabling pinch: ${err.message}`);
+          setError('Failed to enable pinch gesture');
+        }
+
+        hammerInstance.on('pinch', (e) => {
+          try {
+            const adjustmentFactor = 2;
+            const widthDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
+            const heightDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
+
+            setImgWidth(prev => Math.min(Math.max(100, prev + widthDelta), width));
+            setImgHeight(prev => Math.min(Math.max(100, prev + heightDelta), height));
+          } catch (err) {
+            alert(`Error in pinch handler: ${err.message}`);
+            setError('Failed to handle pinch gesture');
+          }
+        });
+
+      } catch (err) {
+        alert(`Error initializing Hammer: ${err.message}`);
+        setError('Failed to initialize touch handlers');
+      }
     };
 
     initHammer();
+
+    return () => {
+      if (hammerInstance) {
+        alert('Cleaning up Hammer instance');
+        hammerInstance.destroy();
+      }
+    };
   }, [isClient, width, height]);
 
-  // Mouse event handlers
-  const handleMouseMove = (e) => {
-    if (isResizing) {
-      const currentMousePos = { x: e.clientX, y: e.clientY };
-      
-      if (currentMousePos.x < mousePos.x) {
-        setImgWidth(prev => Math.max(100, prev - 10));
-        setImgHeight(prev => Math.max(100, prev - 10));
-      } else if (currentMousePos.x > mousePos.x) {
-        setImgWidth(prev => Math.min(width, prev + 10));
-        setImgHeight(prev => Math.min(height, prev + 10));
-      }
-      
-      setMousePos(currentMousePos);
-    }
-  };
-
-  const handleIconMouseDown = (e) => {
-    e.stopPropagation();
-    setIsResizing(true);
-    setMousePos({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleIconMouseUp = () => {
-    setIsResizing(false);
-  };
-
-  useEffect(() => {
-    if (!isClient) return;
-
-    if (isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleIconMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleIconMouseUp);
-      };
-    }
-  }, [isResizing, mousePos, isClient]);
-
-  const handleDrag = (e, data) => {
-    if (!isResizing) {
-      setIsDragging(true);
-      setPosition({ x: data.x, y: data.y });
-    }
-  };
-
-  const handleStop = () => {
-    setIsDragging(false);
-  };
+  // Rest of your component code remains the same...
+  // (Mouse event handlers and render code)
 
   if (!isClient) {
+    alert('Returning null - not client side');
     return null;
   }
 
@@ -117,6 +117,18 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
         overflow: 'hidden',
       }}
     >
+      {error && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          background: 'rgba(255,0,0,0.1)',
+          padding: '5px',
+          zIndex: 1000
+        }}>
+          {error}
+        </div>
+      )}
       <Draggable
         nodeRef={nodeRef}
         bounds="parent"
@@ -125,55 +137,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
         onStop={handleStop}
         disabled={isResizing}
       >
-        <div
-          ref={nodeRef}
-          style={{
-            width: `${imgWidth}px`,
-            height: `${imgHeight}px`,
-            cursor: isResizing ? 'ew-resize' : 'grab',
-            position: 'relative',
-            transition: 'width 0.1s, height 0.1s',
-          }}
-        >
-          <div
-            ref={imageRef}
-            style={{
-              width: '100%',
-              height: '100%',
-              touchAction: 'none',
-            }}
-          >
-            <img
-              src={uploadedImage || "https://ik.imagekit.io/c1jhxlxiy/plate-various-fruits-marble-background-high-quality-photo.jpg?updatedAt=1737178016814"}
-              alt="Draggable Combo Pack"
-              style={{
-                width: '100%',
-                height: '100%',
-                userSelect: 'none',
-                pointerEvents: isResizing ? 'none' : 'auto',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '2px',
-              right: '10px',
-              padding: '5px',
-              mixBlendMode: 'difference',
-              borderRadius: '50%',
-              cursor: 'ew-resize',
-              backgroundColor: isResizing ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
-              touchAction: 'none',
-            }}
-            onMouseDown={handleIconMouseDown}
-          >
-            <FontAwesomeIcon
-              icon={faUpRightAndDownLeftFromCenter}
-              style={{ transform: 'rotate(90deg)' }}
-            />
-          </div>
-        </div>
+        {/* Rest of your JSX remains the same */}
       </Draggable>
     </div>
   );

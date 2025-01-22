@@ -15,6 +15,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   const [isResizing, setIsResizing] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
+  const [rotation, setRotation] = useState(0);
 
   useEffect(() => {
     setIsClient(true);
@@ -22,10 +23,13 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
 
   // Pinch gesture handler using @use-gesture/react
   usePinch(
-    ({ offset: [scale] }) => {
-      const adjustmentFactor = 10 * (scale - 1);
+    ({ offset: [scale], movement: [, , angleDelta] }) => {
+      const adjustmentFactor = 6 * (scale - 1);
       setImgWidth((prev) => Math.min(Math.max(100, prev + adjustmentFactor), width));
       setImgHeight((prev) => Math.min(Math.max(100, prev + adjustmentFactor), height));
+
+      // Update rotation angle
+      setRotation((prev) => prev + angleDelta);
     },
     {
       target: imageRef,
@@ -105,8 +109,9 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
           style={{
             width: `${imgWidth}px`,
             height: `${imgHeight}px`,
-            cursor: isResizing ? 'ew-resize' : 'grab',
+            cursor: isResizing ? 'se-resize' : 'grab',
             position: 'relative',
+            transform: `rotate(${rotation}deg)`,
             transition: 'width 0.1s, height 0.1s',
           }}
         >
@@ -140,7 +145,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
               padding: '5px',
               mixBlendMode: 'difference',
               borderRadius: '50%',
-              cursor: 'ew-resize',
+              cursor: 'se-resize',
               backgroundColor: isResizing ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
             }}
             onMouseDown={handleIconMouseDown}

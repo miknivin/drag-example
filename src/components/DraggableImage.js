@@ -5,6 +5,7 @@ import { faUpRightAndDownLeftFromCenter } from '@fortawesome/free-solid-svg-icon
 import React, { useState, useEffect, useRef } from 'react';
 import Draggable from 'react-draggable';
 import dynamic from 'next/dynamic';
+import Swal from 'sweetalert2';
 
 // Dynamically import Hammer.js only on client side
 const Hammer = dynamic(() => import('hammerjs'), {
@@ -26,7 +27,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
 
   useEffect(() => {
     setIsClient(true);
-    alert('Client-side rendering initialized');
+    Swal.fire('Info', 'Client-side rendering initialized', 'info');
   }, []);
 
   // Initialize Hammer.js
@@ -35,37 +36,41 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
 
     const initHammer = async () => {
       try {
-        alert('Attempting to initialize Hammer.js');
-        alert(`Checks: ${JSON.stringify({
-          isClient,
-          hasImageRef: !!imageRef.current,
-          hasHammer: !!Hammer
-        })}`);
+        Swal.fire('Info', 'Attempting to initialize Hammer.js', 'info');
+        Swal.fire({
+          title: 'Checks',
+          html: `
+            <p>isClient: ${isClient}</p>
+            <p>hasImageRef: ${!!imageRef.current}</p>
+            <p>hasHammer: ${!!Hammer}</p>
+          `,
+          icon: 'info',
+        });
 
         if (!isClient) {
-          alert('Not client side yet');
+          Swal.fire('Warning', 'Not client side yet', 'warning');
           return;
         }
 
         if (!imageRef.current) {
-          alert('Image ref not available');
+          Swal.fire('Warning', 'Image ref not available', 'warning');
           return;
         }
 
         if (!Hammer) {
-          alert('Hammer.js not loaded');
+          Swal.fire('Error', 'Hammer.js not loaded', 'error');
           return;
         }
 
         hammerInstance = new Hammer(imageRef.current);
-        alert('Hammer instance created');
+        Swal.fire('Success', 'Hammer instance created', 'success');
 
         // Enable pinch with error handling
         try {
           hammerInstance.get('pinch').set({ enable: true });
-          alert('Pinch gesture enabled');
+          Swal.fire('Success', 'Pinch gesture enabled', 'success');
         } catch (err) {
-          alert(`Error enabling pinch: ${err.message}`);
+          Swal.fire('Error', `Error enabling pinch: ${err.message}`, 'error');
           setError('Failed to enable pinch gesture');
         }
 
@@ -75,16 +80,16 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
             const widthDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
             const heightDelta = e.scale > 1 ? adjustmentFactor : -adjustmentFactor;
 
-            setImgWidth(prev => Math.min(Math.max(100, prev + widthDelta), width));
-            setImgHeight(prev => Math.min(Math.max(100, prev + heightDelta), height));
+            setImgWidth((prev) => Math.min(Math.max(100, prev + widthDelta), width));
+            setImgHeight((prev) => Math.min(Math.max(100, prev + heightDelta), height));
           } catch (err) {
-            alert(`Error in pinch handler: ${err.message}`);
+            Swal.fire('Error', `Error in pinch handler: ${err.message}`, 'error');
             setError('Failed to handle pinch gesture');
           }
         });
 
       } catch (err) {
-        alert(`Error initializing Hammer: ${err.message}`);
+        Swal.fire('Error', `Error initializing Hammer: ${err.message}`, 'error');
         setError('Failed to initialize touch handlers');
       }
     };
@@ -93,17 +98,14 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
 
     return () => {
       if (hammerInstance) {
-        alert('Cleaning up Hammer instance');
+        Swal.fire('Info', 'Cleaning up Hammer instance', 'info');
         hammerInstance.destroy();
       }
     };
   }, [isClient, width, height]);
 
-  // Rest of your component code remains the same...
-  // (Mouse event handlers and render code)
-
   if (!isClient) {
-    alert('Returning null - not client side');
+    Swal.fire('Warning', 'Returning null - not client side', 'warning');
     return null;
   }
 
@@ -118,14 +120,16 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
       }}
     >
       {error && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          background: 'rgba(255,0,0,0.1)',
-          padding: '5px',
-          zIndex: 1000
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            background: 'rgba(255,0,0,0.1)',
+            padding: '5px',
+            zIndex: 1000,
+          }}
+        >
           {error}
         </div>
       )}
@@ -133,11 +137,20 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
         nodeRef={nodeRef}
         bounds="parent"
         position={position}
-        onDrag={handleDrag}
-        onStop={handleStop}
+        onDrag={(e, data) => setPosition({ x: data.x, y: data.y })}
+        onStop={() => Swal.fire('Info', 'Drag operation completed', 'info')}
         disabled={isResizing}
       >
-        {/* Rest of your JSX remains the same */}
+        <img
+          ref={imageRef}
+          src={uploadedImage}
+          alt="Draggable"
+          style={{
+            width: `${imgWidth}px`,
+            height: `${imgHeight}px`,
+            cursor: isDragging ? 'grabbing' : 'grab',
+          }}
+        />
       </Draggable>
     </div>
   );

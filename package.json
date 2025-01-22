@@ -21,7 +21,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-draggable": "^4.4.6",
-    "react-dropzone": "^14.3.5"
+    "react-dropzone": "^14.3.5",
+    "sweetalert2": "^11.15.10"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

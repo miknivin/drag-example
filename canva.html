@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enlarge Image on Canvas</title>
+  <style>
+    canvas {
+      border: 1px solid #000;
+    }
+    button {
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="myCanvas" width="600" height="400"></canvas>
+  <button id="enlargeButton">Enlarge Image</button>
+
+  <script>
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const img = new Image();
+    img.src = 'https://ik.imagekit.io/c1jhxlxiy/combo%20pack%20another.webp?updatedAt=1722794717946';
+
+    // Initial image position and size
+    let imgX = 50;
+    let imgY = 50;
+    let imgWidth = 200;
+    let imgHeight = 200;
+
+    img.onload = () => {
+      ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+    };
+
+    // Utility function to redraw the image
+    function redraw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+      ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight); // Redraw the image
+    }
+
+    // Enlarge the image
+    document.getElementById('enlargeButton').addEventListener('click', () => {
+      imgWidth *= 1.2; // Increase width by 20%
+      imgHeight *= 1.2; // Increase height by 20%
+      redraw();
+    });
+  </script>
+</body>
+</html>

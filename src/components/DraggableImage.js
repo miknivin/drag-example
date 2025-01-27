@@ -5,17 +5,22 @@ import { faUpRightAndDownLeftFromCenter } from '@fortawesome/free-solid-svg-icon
 import React, { useState, useEffect, useRef } from 'react';
 import Draggable from 'react-draggable';
 import { usePinch } from '@use-gesture/react';
+import { useSpring, animated } from 'react-spring';
 
 const DraggableImage = ({ width, height, uploadedImage }) => {
   const nodeRef = useRef(null);
   const imageRef = useRef(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [imgWidth, setImgWidth] = useState(200);
-  const [imgHeight, setImgHeight] = useState(200);
   const [isResizing, setIsResizing] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
-  const [rotation, setRotation] = useState(0);
+
+  // Spring values for smooth scaling and rotation
+  const [{ scale, rotate }, api] = useSpring(() => ({
+    scale: 1,
+    rotate: 0,
+    config: { mass: 1, tension: 170, friction: 26 },
+  }));
 
   useEffect(() => {
     setIsClient(true);
@@ -24,16 +29,12 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   // Pinch gesture handler using @use-gesture/react
   usePinch(
     ({ offset: [scale], movement: [, , angleDelta] }) => {
-      const adjustmentFactor = 6 * (scale - 1);
-      setImgWidth((prev) => Math.min(Math.max(100, prev + adjustmentFactor), width));
-      setImgHeight((prev) => Math.min(Math.max(100, prev + adjustmentFactor), height));
-
-      // Update rotation angle
-      setRotation((prev) => prev + angleDelta);
+      api.start({ scale, rotate: rotate.get() + angleDelta });
     },
     {
       target: imageRef,
       eventOptions: { passive: false },
+      pinch: { scaleBounds: { min: 0.5, max: 3 } }, // Limit scale range
     }
   );
 
@@ -43,11 +44,9 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
       const currentMousePos = { x: e.clientX, y: e.clientY };
 
       if (currentMousePos.x < mousePos.x) {
-        setImgWidth((prev) => Math.max(100, prev - 10));
-        setImgHeight((prev) => Math.max(100, prev - 10));
+        api.start({ scale: Math.max(0.5, scale.get() - 0.1) });
       } else if (currentMousePos.x > mousePos.x) {
-        setImgWidth((prev) => Math.min(width, prev + 10));
-        setImgHeight((prev) => Math.min(height, prev + 10));
+        api.start({ scale: Math.min(3, scale.get() + 0.1) });
       }
 
       setMousePos(currentMousePos);
@@ -104,15 +103,15 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
         onDrag={handleDrag}
         disabled={isResizing}
       >
-        <div
+        <animated.div
           ref={nodeRef}
           style={{
-            width: `${imgWidth}px`,
-            height: `${imgHeight}px`,
+            width: '200px', // Base width
+            height: '200px', // Base height
             cursor: isResizing ? 'se-resize' : 'grab',
             position: 'relative',
-            transform: `rotate(${rotation}deg)`,
-            transition: 'width 0.1s, height 0.1s',
+            transform: scale.to((s) => `scale(${s}) rotate(${rotate.get()}deg)`),
+            touchAction: 'none',
           }}
         >
           <div
@@ -155,7 +154,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
               style={{ transform: 'rotate(90deg)' }}
             />
           </div>
-        </div>
+        </animated.div>
       </Draggable>
     </div>
   );

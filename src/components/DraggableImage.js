@@ -1,54 +1,68 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @next/next/no-img-element */
-'use client';
+'use-client;'
+import React, { useState, useEffect, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUpRightAndDownLeftFromCenter } from '@fortawesome/free-solid-svg-icons';
-import React, { useState, useEffect, useRef } from 'react';
 import Draggable from 'react-draggable';
-import { usePinch } from '@use-gesture/react';
-import { useSpring, animated } from 'react-spring';
+import { useGesture } from '@use-gesture/react';
 
 const DraggableImage = ({ width, height, uploadedImage }) => {
   const nodeRef = useRef(null);
-  const imageRef = useRef(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isResizing, setIsResizing] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
-
-  // Spring values for smooth scaling and rotation
-  const [{ scale, rotate }, api] = useSpring(() => ({
-    scale: 1,
-    rotate: 0,
-    config: { mass: 1, tension: 170, friction: 26 },
-  }));
+  const [scale, setScale] = useState(1);
+  const [rotation, setRotation] = useState(0);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // Pinch gesture handler using @use-gesture/react
-  usePinch(
-    ({ offset: [scale], movement: [, , angleDelta] }) => {
-      api.start({ scale, rotate: rotate.get() + angleDelta });
+  useGesture(
+    {
+      onPinchStart: ({ event }) => {
+        console.log('Pinch Start:', { 
+          event: event.type,
+          touches: event.touches?.length
+        });
+      },
+      onPinch: ({ offset: [d], movement: [angle], event }) => {
+        event.preventDefault();
+        setScale(Math.min(Math.max(0.5, d), 3));
+        console.log(scale);
+        
+        setRotation(prev => prev + angle);
+      },
+      onPinchEnd: ({ event }) => {
+        console.log('Pinch End:', { 
+          event: event.type,
+          finalScale: scale
+        });
+      }
     },
     {
-      target: imageRef,
+      target: nodeRef,
       eventOptions: { passive: false },
-      pinch: { scaleBounds: { min: 0.5, max: 3 } }, // Limit scale range
+      pinch: {
+        from: scale,
+        scaleBounds: { min: 0.5, max: 3 },
+        rubberband: true
+      },
     }
   );
 
-  // Mouse event handlers for resizing
   const handleMouseMove = (e) => {
     if (isResizing) {
       const currentMousePos = { x: e.clientX, y: e.clientY };
-
+      
       if (currentMousePos.x < mousePos.x) {
-        api.start({ scale: Math.max(0.5, scale.get() - 0.1) });
+        setScale(prev => Math.max(0.5, prev - 0.1));
       } else if (currentMousePos.x > mousePos.x) {
-        api.start({ scale: Math.min(3, scale.get() + 0.1) });
+        setScale(prev => Math.min(3, prev + 0.1));
       }
-
+      
       setMousePos(currentMousePos);
     }
   };
@@ -87,14 +101,9 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   }
 
   return (
-    <div
-      style={{
-        width: `${width}px`,
-        height: `${height}px`,
-        border: '2px solid #ddd',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
+    <div 
+      className="relative overflow-hidden border-2 border-gray-200" 
+      style={{ width: `${width}px`, height: `${height}px` }}
     >
       <Draggable
         nodeRef={nodeRef}
@@ -103,58 +112,49 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
         onDrag={handleDrag}
         disabled={isResizing}
       >
-        <animated.div
+        <div 
           ref={nodeRef}
           style={{
-            width: '200px', // Base width
-            height: '200px', // Base height
-            cursor: isResizing ? 'se-resize' : 'grab',
+            width: '200px',
+            height: '200px',
             position: 'relative',
-            transform: scale.to((s) => `scale(${s}) rotate(${rotate.get()}deg)`),
+            cursor: isResizing ? 'se-resize' : 'grab',
             touchAction: 'none',
           }}
         >
           <div
-            ref={imageRef}
             style={{
               width: '100%',
               height: '100%',
-              touchAction: 'none',
+              transform: `scale(${scale}) rotate(${rotation}deg)`,
+              transformOrigin: 'center center',
             }}
           >
-            <img
-              src={
-                uploadedImage ||
-                'https://ik.imagekit.io/c1jhxlxiy/plate-various-fruits-marble-background-high-quality-photo.jpg?updatedAt=1737178016814'
-              }
-              alt="Draggable Combo Pack"
+            <div className="w-full h-full touch-none">
+              <img
+                src={uploadedImage || '/api/placeholder/200/200'}
+                alt="Draggable Content"
+                className="w-full h-full select-none"
+                style={{
+                  pointerEvents: isResizing ? 'none' : 'auto',
+                }}
+              />
+            </div>
+            <div
+              className="absolute bottom-0.5 right-2.5 p-1.5 rounded-full cursor-se-resize"
               style={{
-                width: '100%',
-                height: '100%',
-                userSelect: 'none',
-                pointerEvents: isResizing ? 'none' : 'auto',
+                mixBlendMode: 'difference',
+                backgroundColor: isResizing ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
               }}
-            />
+              onMouseDown={handleIconMouseDown}
+            >
+              <FontAwesomeIcon
+                icon={faUpRightAndDownLeftFromCenter}
+                className="transform rotate-90"
+              />
+            </div>
           </div>
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '2px',
-              right: '10px',
-              padding: '5px',
-              mixBlendMode: 'difference',
-              borderRadius: '50%',
-              cursor: 'se-resize',
-              backgroundColor: isResizing ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
-            }}
-            onMouseDown={handleIconMouseDown}
-          >
-            <FontAwesomeIcon
-              icon={faUpRightAndDownLeftFromCenter}
-              style={{ transform: 'rotate(90deg)' }}
-            />
-          </div>
-        </animated.div>
+        </div>
       </Draggable>
     </div>
   );

@@ -3,19 +3,22 @@
 'use-client;'
 import React, { useState, useEffect, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUpRightAndDownLeftFromCenter } from '@fortawesome/free-solid-svg-icons';
+import { faRotateRight, faUpRightAndDownLeftFromCenter } from '@fortawesome/free-solid-svg-icons';
 import Draggable from 'react-draggable';
 import { useGesture } from '@use-gesture/react';
 
 const DraggableImage = ({ width, height, uploadedImage }) => {
   const nodeRef = useRef(null);
+  const secondRef = useRef(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isResizing, setIsResizing] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
-
+  const [angle, setAngle] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -23,24 +26,20 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   useGesture(
     {
       onPinchStart: ({ event }) => {
-        console.log('Pinch Start:', { 
-          event: event.type,
-          touches: event.touches?.length
-        });
+        console.log('Pinch started');
       },
-      onPinch: ({ offset: [d], movement: [angle], event }) => {
-        event.preventDefault();
-        setScale(Math.min(Math.max(0.5, d), 3));
-        console.log(scale);
-        
-        setRotation(prev => prev + angle);
+      onPinch: ({ offset: [distance], da: [deltaAngle], event }) => {
+        event.preventDefault(); // Prevents default zoom behavior
+
+        // Update scale within bounds
+        setScale(Math.min(Math.max(0.5, distance), 3));
       },
       onPinchEnd: ({ event }) => {
-        console.log('Pinch End:', { 
+        console.log('Pinch End:', {
           event: event.type,
-          finalScale: scale
+          finalScale: scale,
         });
-      }
+      },
     },
     {
       target: nodeRef,
@@ -48,21 +47,39 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
       pinch: {
         from: scale,
         scaleBounds: { min: 0.5, max: 3 },
-        rubberband: true
+        rubberband: true,
       },
     }
+  );
+
+  useGesture(
+    {
+      onDrag: ({ movement: [x, y], memo = { angle: 0 } }) => {
+        if (!isResizing) {
+          setIsRotating(true)
+          // Only update the rotation if resizing is not active
+          const radianAngle = Math.atan2(y, x); // Calculate angle in radians
+          const degreeAngle = (radianAngle * 180) / Math.PI; // Convert to degrees
+          setAngle(degreeAngle.toFixed(2)); // Update angle state
+        }
+      },
+      onDragEnd: () => {
+        setIsRotating(false); 
+      },
+    },
+    { target: secondRef }
   );
 
   const handleMouseMove = (e) => {
     if (isResizing) {
       const currentMousePos = { x: e.clientX, y: e.clientY };
-      
+
       if (currentMousePos.x < mousePos.x) {
-        setScale(prev => Math.max(0.5, prev - 0.1));
+        setScale((prev) => Math.max(0.5, prev - 0.1));
       } else if (currentMousePos.x > mousePos.x) {
-        setScale(prev => Math.min(3, prev + 0.1));
+        setScale((prev) => Math.min(3, prev + 0.1));
       }
-      
+
       setMousePos(currentMousePos);
     }
   };
@@ -80,7 +97,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   useEffect(() => {
     if (!isClient) return;
 
-    if (isResizing) {
+    if (isResizing && !isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleIconMouseUp);
       return () => {
@@ -91,7 +108,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   }, [isResizing, mousePos, isClient]);
 
   const handleDrag = (e, data) => {
-    if (!isResizing) {
+    if (!isResizing && !isDragging) {
       setPosition({ x: data.x, y: data.y });
     }
   };
@@ -101,18 +118,18 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   }
 
   return (
-    <div 
-      className="relative overflow-hidden border-2 border-gray-200" 
+    <div
+      className="relative overflow-hidden border-2 border-gray-200"
       style={{ width: `${width}px`, height: `${height}px` }}
     >
       <Draggable
         nodeRef={nodeRef}
         bounds="parent"
-        position={position}
         onDrag={handleDrag}
-        disabled={isResizing}
+        disabled={isResizing || isRotating}
+        style={{width:"fit-content",height:"fit-content"}}
       >
-        <div 
+        <div
           ref={nodeRef}
           style={{
             width: '200px',
@@ -126,7 +143,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
             style={{
               width: '100%',
               height: '100%',
-              transform: `scale(${scale}) rotate(${rotation}deg)`,
+              transform: `scale(${scale})`,
               transformOrigin: 'center center',
             }}
           >
@@ -136,6 +153,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
                 alt="Draggable Content"
                 className="w-full h-full select-none"
                 style={{
+                  transform: `rotate(${angle}deg)`,
                   pointerEvents: isResizing ? 'none' : 'auto',
                 }}
               />
@@ -148,12 +166,21 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
               }}
               onMouseDown={handleIconMouseDown}
             >
-              <FontAwesomeIcon
-                icon={faUpRightAndDownLeftFromCenter}
-                className="transform rotate-90"
-              />
+              <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} className="transform rotate-90" />
             </div>
+            <div
+            style={{
+              position:"absolute",
+              bottom:0,
+              left:"50%",
+              touchAction: 'none',
+            }}
+            ref={secondRef}
+          >
+            <FontAwesomeIcon icon={faRotateRight} />
           </div>
+          </div>
+          
         </div>
       </Draggable>
     </div>

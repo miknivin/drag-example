@@ -1,73 +1,94 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @next/next/no-img-element */
-'use-client;'
-import React, { useState, useEffect, useRef } from 'react';
+'use client';
+import React, { useState, useRef, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRotateRight, faUpRightAndDownLeftFromCenter } from '@fortawesome/free-solid-svg-icons';
-import Draggable from 'react-draggable';
 import { useGesture } from '@use-gesture/react';
-
 const DraggableImage = ({ width, height, uploadedImage }) => {
   const nodeRef = useRef(null);
-  const secondRef = useRef(null);
+  const rotateRef = useRef(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isResizing, setIsResizing] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
   const [scale, setScale] = useState(1);
-  const [rotation, setRotation] = useState(0);
   const [angle, setAngle] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  // Handle drag start
+  const handleDragStart = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+
+    // Get the initial mouse/touch position
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    setDragStartPos({
+      x: clientX - position.x,
+      y: clientY - position.y,
+    });
+  };
+
+  // Handle drag move
+  const handleDragMove = (e) => {
+    if (isDragging && !isResizing && !isRotating) {
+      e.preventDefault();
+
+      // Get the current mouse/touch position
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+      // Calculate new position
+      const newX = clientX - dragStartPos.x;
+      const newY = clientY - dragStartPos.y;
+
+      setPosition({ x: newX, y: newY });
+    }
+  };
+
+  // Handle drag end
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  // Gesture for rotating
   useGesture(
     {
-      onPinchStart: ({ event }) => {
-        console.log('Pinch started');
+      onDrag: ({ movement: [x, y], memo = { angle: 0 } }) => {
+        if (!isResizing) {
+          setIsRotating(true);
+          const radianAngle = Math.atan2(y, x);
+          const degreeAngle = (radianAngle * 180) / Math.PI;
+          setAngle(degreeAngle.toFixed(2));
+        }
       },
-      onPinch: ({ offset: [distance], da: [deltaAngle], event }) => {
-        event.preventDefault(); // Prevents default zoom behavior
+      onDragEnd: () => {
+        setIsRotating(false);
+      },
+    },
+    { target: rotateRef, eventOptions: { passive: false } }
+  );
 
-        // Update scale within bounds
+  // Gesture for scaling (pinch)
+  useGesture(
+    {
+      onPinch: ({ offset: [distance] }) => {
         setScale(Math.min(Math.max(0.5, distance), 3));
-      },
-      onPinchEnd: ({ event }) => {
-        console.log('Pinch End:', {
-          event: event.type,
-          finalScale: scale,
-        });
       },
     },
     {
       target: nodeRef,
       eventOptions: { passive: false },
-      pinch: {
-        from: scale,
-        scaleBounds: { min: 0.5, max: 3 },
-        rubberband: true,
-      },
+      pinch: { scaleBounds: { min: 0.5, max: 3 }, rubberband: true },
     }
-  );
-
-  useGesture(
-    {
-      onDrag: ({ movement: [x, y], memo = { angle: 0 } }) => {
-        if (!isResizing) {
-          setIsRotating(true)
-          // Only update the rotation if resizing is not active
-          const radianAngle = Math.atan2(y, x); // Calculate angle in radians
-          const degreeAngle = (radianAngle * 180) / Math.PI; // Convert to degrees
-          setAngle(degreeAngle.toFixed(2)); // Update angle state
-        }
-      },
-      onDragEnd: () => {
-        setIsRotating(false); 
-      },
-    },
-    { target: secondRef }
   );
 
   const handleMouseMove = (e) => {
@@ -97,7 +118,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   useEffect(() => {
     if (!isClient) return;
 
-    if (isResizing && !isDragging) {
+    if (isResizing && !isRotating) {
       window.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleIconMouseUp);
       return () => {
@@ -107,11 +128,30 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
     }
   }, [isResizing, mousePos, isClient]);
 
-  const handleDrag = (e, data) => {
-    if (!isResizing && !isDragging) {
-      setPosition({ x: data.x, y: data.y });
-    }
-  };
+  // Add event listeners for dragging
+  useEffect(() => {
+    const node = nodeRef.current;
+    if (!node) return;
+
+    const handleMove = (e) => handleDragMove(e);
+    const handleEnd = () => handleDragEnd();
+
+    node.addEventListener('mousedown', handleDragStart);
+    node.addEventListener('touchstart', handleDragStart, { passive: false });
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchend', handleEnd);
+
+    return () => {
+      node.removeEventListener('mousedown', handleDragStart);
+      node.removeEventListener('touchstart', handleDragStart);
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [isDragging, dragStartPos, isResizing, isRotating]);
 
   if (!isClient) {
     return null;
@@ -122,67 +162,57 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
       className="relative overflow-hidden border-2 border-gray-200"
       style={{ width: `${width}px`, height: `${height}px` }}
     >
-      <Draggable
-        nodeRef={nodeRef}
-        bounds="parent"
-        onDrag={handleDrag}
-        disabled={isResizing || isRotating}
-        style={{width:"fit-content",height:"fit-content"}}
+      <div
+        ref={nodeRef}
+        style={{
+          position: 'absolute',
+          top: position.y,
+          left: position.x,
+          width: '200px',
+          height: '200px',
+          cursor: isResizing ? 'se-resize' : isDragging ? 'grabbing' : 'grab',
+          touchAction: 'none',
+          transform: `scale(${scale}) rotate(${angle}deg)`,
+          border:"3px solid black"
+        }}
       >
         <div
-          ref={nodeRef}
           style={{
-            width: '200px',
-            height: '200px',
-            position: 'relative',
-            cursor: isResizing ? 'se-resize' : 'grab',
-            touchAction: 'none',
+            width: '100%',
+            height: '100%',
+   
+            transformOrigin: 'center center',
           }}
         >
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              transform: `scale(${scale})`,
-              transformOrigin: 'center center',
-            }}
-          >
-            <div className="w-full h-full touch-none">
-              <img
-                src={uploadedImage || '/api/placeholder/200/200'}
-                alt="Draggable Content"
-                className="w-full h-full select-none"
-                style={{
-                  transform: `rotate(${angle}deg)`,
-                  pointerEvents: isResizing ? 'none' : 'auto',
-                }}
-              />
-            </div>
-            <div
-              className="absolute bottom-0.5 right-2.5 p-1.5 rounded-full cursor-se-resize"
-              style={{
-                mixBlendMode: 'difference',
-                backgroundColor: isResizing ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
-              }}
-              onMouseDown={handleIconMouseDown}
-            >
-              <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} className="transform rotate-90" />
-            </div>
-            <div
-            style={{
-              position:"absolute",
-              bottom:0,
-              left:"50%",
-              touchAction: 'none',
-            }}
-            ref={secondRef}
-          >
-            <FontAwesomeIcon icon={faRotateRight} />
-          </div>
-          </div>
-          
+          <img
+            src={uploadedImage || '/api/placeholder/200/200'}
+            alt="Draggable Content"
+            className="w-full h-full select-none"
+            style={{ pointerEvents: isResizing ? 'none' : 'auto' }}
+          />
         </div>
-      </Draggable>
+        <div
+          className="absolute bottom-0.5 right-2.5 p-1.5 rounded-full cursor-se-resize"
+          style={{
+            mixBlendMode: 'difference',
+            backgroundColor: isResizing ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
+          }}
+          onMouseDown={handleIconMouseDown}
+        >
+          <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} className="transform rotate-90" />
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: '50%',
+            touchAction: 'none',
+          }}
+          ref={rotateRef}
+        >
+          <FontAwesomeIcon icon={faRotateRight} />
+        </div>
+      </div>
     </div>
   );
 };

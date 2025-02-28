@@ -40,8 +40,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   // Handle drag move
   const handleDragMove = (e) => {
     if (isDragging && !isResizing && !isRotating) {
-      e.preventDefault();
-
+      
       // Get the current mouse/touch position
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -131,6 +130,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
   // Add event listeners for dragging
   useEffect(() => {
     const node = nodeRef.current;
+    
     if (!node) return;
 
     const handleMove = (e) => handleDragMove(e);
@@ -151,7 +151,7 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
       window.removeEventListener('mouseup', handleEnd);
       window.removeEventListener('touchend', handleEnd);
     };
-  }, [isDragging, dragStartPos, isResizing, isRotating]);
+  }, [isDragging, dragStartPos, isResizing, isRotating,nodeRef, isClient]);
 
   if (!isClient) {
     return null;
@@ -173,7 +173,6 @@ const DraggableImage = ({ width, height, uploadedImage }) => {
           cursor: isResizing ? 'se-resize' : isDragging ? 'grabbing' : 'grab',
           touchAction: 'none',
           transform: `scale(${scale}) rotate(${angle}deg)`,
-          border:"3px solid black"
         }}
       >
         <div
